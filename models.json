@@ -1,19 +1,14 @@
-# Models sheet for Bayesian Vancomycin Dosing Script
-
-# This sheet stores different population pharmacokinetic models to be used as Bayesian priors in the script.
-# Each model is defined using a dictionary format for easy access and integration into the main dosing script.
-
-models = {
+{
     "Goti_2018": {
         "description": "Two-compartment vancomycin model with parameters adapted for adults undergoing dialysis.",
         "parameters": {
-            "CL_base": 4.5,  # Clearance (L/hr)
-            "V": 58.4,  # Volume of distribution (L/70kg)
-            "V2": 38.4,  # Peripheral volume of distribution (L)
-            "Q": 6.5,  # Intercompartmental clearance (L/hr)
-            "TH_CRCL": 0.8,  # Clearance creatinine coefficient
-            "TH_DIAL_CL": 0.7,  # Dialysis impact on clearance
-            "TH_DIAL_V": 0.5   # Dialysis impact on volume of distribution
+            "CL_base": 4.5,
+            "V": 58.4,
+            "V2": 38.4,
+            "Q": 6.5,
+            "TH_CRCL": 0.8,
+            "TH_DIAL_CL": 0.7,
+            "TH_DIAL_V": 0.5
         },
         "differential_equations": {
             "dA1_dt": "-(CL_base * (CLCR/120)**TH_CRCL * TH_DIAL_CL / V) * A1 - (Q / V) * A1 + (Q / V2) * A2",
@@ -24,11 +19,11 @@ models = {
     "Carreno_2017": {
         "description": "Bayesian PK model for obese patients developed by Carreno et al., suitable for estimating vancomycin AUC using limited pharmacokinetic sampling.",
         "parameters": {
-            "CL": 4.8,  # Clearance (L/hr)
-            "V": 75.0,  # Volume of distribution (L)
-            "k12": 2.29,  # Transfer rate constant from central to peripheral (1/hr)
-            "k21": 1.44,  # Transfer rate constant from peripheral to central (1/hr)
-            "ke": 0.3  # Elimination constant from central compartment (1/hr)
+            "CL": 4.8,
+            "V": 75.0,
+            "k12": 2.29,
+            "k21": 1.44,
+            "ke": 0.3
         },
         "differential_equations": {
             "dX1_dt": "R(t) - (ke + k12) * X1 + k21 * X2",
@@ -39,11 +34,11 @@ models = {
     "Model_4_Obese_Patients": {
         "description": "Population PK model derived from obese patients with a wide range of renal function.",
         "parameters": {
-            "V_c": 25.76,  # Central volume of distribution (L)
-            "k12": 2.36,  # Transfer rate constant (1/hr)
-            "k21": 2.72,  # Transfer rate constant (1/hr)
-            "CL_INT": 0.48,  # Clearance due to non-renal means (L/hr)
-            "CL_SLOPE": 0.83  # Clearance slope related to creatinine clearance
+            "V_c": 25.76,
+            "k12": 2.36,
+            "k21": 2.72,
+            "CL_INT": 0.48,
+            "CL_SLOPE": 0.83
         },
         "differential_equations": {
             "dX1_dt": "R(t) - ((CL_INT + CL_SLOPE * CLCR) / V_c + k12) * X1 + k21 * X2",
@@ -54,13 +49,13 @@ models = {
     "Tong_2021": {
         "description": "Vancomycin model adapted for adults, incorporating dialysis adjustments as presented by Tong et al. in 2021.",
         "parameters": {
-            "CL_base": 4.5,  # Clearance (L/hr)
-            "V": 58.4,  # Volume of distribution (L/70kg)
-            "V2": 38.4,  # Peripheral volume of distribution (L)
-            "Q": 6.5,  # Intercompartmental clearance (L/hr)
-            "TH_CRCL": 0.8,  # Clearance creatinine coefficient
-            "TH_DIAL_CL": 0.7,  # Dialysis impact on clearance
-            "TH_DIAL_V": 0.5   # Dialysis impact on volume of distribution
+            "CL_base": 4.5,
+            "V": 58.4,
+            "V2": 38.4,
+            "Q": 6.5,
+            "TH_CRCL": 0.8,
+            "TH_DIAL_CL": 0.7,
+            "TH_DIAL_V": 0.5
         },
         "differential_equations": {
             "dA1_dt": "-(CL_base * (CLCR/120)**TH_CRCL * TH_DIAL_CL / V) * A1 - (Q / V) * A1 + (Q / V2) * A2",
@@ -69,15 +64,3 @@ models = {
         "comments": "This model includes specific adjustments for dialysis as described in Tong et al., suitable for adult patients with varying levels of renal function."
     }
 }
-
-# Function to get a model by name
-def get_model(model_name):
-    return models.get(model_name, None)
-
-# Example usage
-if __name__ == "__main__":
-    model = get_model("Tong_2021")
-    if model:
-        print(f"Using model: {model['description']}")
-        print(f"Parameters: {model['parameters']}")
-        print(f"Differential Equations: {model['differential_equations']}")
