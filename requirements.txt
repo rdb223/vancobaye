@@ -1,8 +1,5 @@
 streamlit
 pandas
-numpy
+numpy==1.21.6  # Ensure it's compatible with Python <3.11
 pkpdposterior
-tempfile
-subprocess
-os
-rpy2  # To integrate R code execution
+rpy2
