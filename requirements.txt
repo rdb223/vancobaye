@@ -1,7 +1,7 @@
 streamlit
 pandas
 numpy
-pymc
-arviz
+pymc==4.0.0
+arviz==0.11.4
 tempfile
 rpy2
