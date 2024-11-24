@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+pkpdposterior
+tempfile
+subprocess
+os
+rpy2  # To integrate R code execution
