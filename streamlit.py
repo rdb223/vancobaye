@@ -1,103 +1,86 @@
-import streamlit as st
-import subprocess
-import tempfile
-import os
-import pandas as pd
 import numpy as np
-import pymc as pm
-import arviz as az
+import scipy.stats as stats
+from scipy.optimize import minimize
+import json  # For loading different models from JSON file
 
-def run_pkpdsim_r_script(weight, age, creatinine_clearance):
-    """
-    This function calls an R script to run the vancomycin simulation.
-    The R script uses PKPDsim to calculate the vancomycin dose based on user inputs.
-    """
-    # Create a temporary R script to execute PKPDsim code
-    r_script_content = f"""
-library(PKPDsim)
+# Load models from a JSON file in the repository
+try:
+    with open('models.json', 'r') as file:
+        models = json.load(file)
+except FileNotFoundError:
+    print("Error: models.json file not found. Ensure it is in the correct directory.")
+    models = {}
 
-# Set patient-specific parameters
-dose_weight <- {weight}
-age <- {age}
-creatinine_clearance <- {creatinine_clearance}
+# Function to get a model by name
+def get_model(model_name):
+    return models.get(model_name, None)
 
-# Vancomycin PK model
-parameters <- list(CL = 3.5 * (creatinine_clearance / 100), V = 0.7 * dose_weight) # Example parameter calculation
+# Prior Information (for Bayesian calculation)
+def prior(theta, model):
+    CL, V = theta
+    # Using pre-trained prior models for CL and V from the loaded model
+    cl_prior = stats.norm(loc=model['parameters']['CL_base'], scale=0.5).logpdf(CL)  # Assuming a standard deviation of 0.5 for simplicity
+    v_prior = stats.norm(loc=model['parameters']['V'], scale=5.0).logpdf(V)  # Assuming a standard deviation of 5.0 for simplicity
+    return cl_prior + v_prior
 
-# One-compartment model for vancomycin
-model <- new_ode_model("pk_1cmt_iv")
+# Likelihood Function (Given Observed Data)
+def likelihood(theta, dose_times, concentrations):
+    CL, V = theta
+    predicted_conc = predict_concentration(dose_times, CL, V)
+    # Assuming normal residual variability
+    return np.sum(stats.norm.logpdf(concentrations, predicted_conc, 1.0))
 
-# Define dosing regimen: 1000 mg every 12 hours
-dosing_regimen <- new_regimen(amt = 1000, interval = 12, n = 5)
+# Predict Concentration for Vancomycin
+# One compartment model assuming IV bolus doses
+def predict_concentration(dose_times, CL, V):
+    k = CL / V
+    concentrations = []
+    for dose_time in dose_times:
+        dose, time = dose_time
+        concentration = (dose / V) * np.exp(-k * time)
+        concentrations.append(concentration)
+    return np.array(concentrations)
 
-# Run simulation
-result <- sim(ode = model, parameters = parameters, regimen = dosing_regimen)
+# Posterior Function (combining prior and likelihood)
+def posterior(theta, dose_times, concentrations, model):
+    return -(prior(theta, model) + likelihood(theta, dose_times, concentrations))
 
-# Extract the last concentration
-dose_conc <- tail(result$y[, 2], 1)
+# Sample Data (Patient Specific)
+patient_weight = 85.0  # kg
+serum_creatinine = 1.2  # mg/dL
+dose_times = [
+    (1000, 1.0),  # (dose in mg, time in hours)
+    (1000, 5.0),
+]
+observed_concentrations = [25.0, 15.0]  # Observed drug concentrations (mg/L)
 
-# Print the output
-cat("Vancomycin concentration: ", round(dose_conc, 2), " mg/L\n")
-    """
-    # Write the R script to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".R") as temp_script:
-        temp_script.write(r_script_content.encode('utf-8'))
-        temp_script_name = temp_script.name
+# Load the model to use for Bayesian calculation
+model_name = "Tong_2021"
+model = get_model(model_name)
+if model is None:
+    print(f"Error: Model '{model_name}' not found in models.json.")
+else:
+    # Initial Guess for CL and V (using population-based formula)
+    initial_guess = [
+        model['parameters']['CL_base'],  # Initial guess for clearance (CL)
+        model['parameters']['V']  # Initial guess for volume of distribution (V)
+    ]
 
-    try:
-        # Execute the R script using subprocess
-        result = subprocess.run(["Rscript", temp_script_name], capture_output=True, text=True)
-        if result.returncode == 0:
-            return result.stdout
-        else:
-            return f"Error: {result.stderr}"
-    finally:
-        # Remove the temporary R script
-        os.remove(temp_script_name)
+    # Optimization to Find Posterior Mode
+    result = minimize(posterior, initial_guess, args=(dose_times, observed_concentrations, model), method='L-BFGS-B', bounds=[(0.1, 10), (10, 200)])
 
-def run_bayesian_inference(weight, age, creatinine_clearance):
-    """
-    This function uses PyMC to run Bayesian inference
-    for more precise dosing based on the patient's specific parameters.
-    """
-    # Simulate observed data (placeholder for real patient data)
-    observed_concentration = 15.0  # Example observed concentration in mg/L
+    # Extract Individualized Parameters (CL and V)
+    if result.success:
+        estimated_CL, estimated_V = result.x
+        print(f"Estimated Clearance (CL): {estimated_CL:.2f} L/h")
+        print(f"Estimated Volume of Distribution (V): {estimated_V:.2f} L")
+    else:
+        print("Optimization failed. Try a different initial guess.")
 
-    # Define Bayesian model
-    with pm.Model() as model:
-        # Priors for parameters
-        CL = pm.Normal('CL', mu=3.5 * (creatinine_clearance / 100), sigma=0.5)
-        V = pm.Normal('V', mu=0.7 * weight, sigma=0.1)
+    # Suggested Dose Calculation (Target Trough 15-20 mg/L)
+    def suggest_dose(CL, V, target_concentration=15.0, interval=12.0):
+        dose = (target_concentration * V) * (1 - np.exp(-CL / V * interval))
+        return dose
 
-        # Likelihood (observed data)
-        concentration = CL / V
-        observed = pm.Normal('observed', mu=concentration, sigma=1.0, observed=observed_concentration)
-
-        # Posterior sampling
-        trace = pm.sample(1000, return_inferencedata=True)
-
-    # Summarize the posterior
-    summary = az.summary(trace)
-    return summary
-
-# Streamlit interface
-def main():
-    st.title("Vancomycin Dosing Calculator")
-
-    # Get user input for patient details
-    weight = st.number_input("Enter patient weight (kg):", min_value=30, max_value=200, value=70, step=1)
-    age = st.number_input("Enter patient age (years):", min_value=18, max_value=100, value=30, step=1)
-    creatinine_clearance = st.number_input("Enter creatinine clearance (mL/min):", min_value=10, max_value=200, value=100, step=5)
-
-    if st.button("Calculate Vancomycin Dose (Traditional Method)"):
-        # Run the R script to simulate dosing
-        output = run_pkpdsim_r_script(weight, age, creatinine_clearance)
-        st.text(output)
-
-    if st.button("Calculate Vancomycin Dose (Bayesian Method)"):
-        # Run Bayesian inference for more precise dosing
-        bayesian_output = run_bayesian_inference(weight, age, creatinine_clearance)
-        st.text(f"Posterior Estimate for Vancomycin Dosing:\n{bayesian_output}")
-
-if __name__ == "__main__":
-    main()
+    dose = suggest_dose(estimated_CL, estimated_V)
+    print(f"Suggested Dose: {dose:.2f} mg per {interval:.2f} hours")
