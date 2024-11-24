@@ -4,7 +4,8 @@ import tempfile
 import os
 import pandas as pd
 import numpy as np
-from pkpdposterior import PKPDposterior
+import pymc as pm
+import arviz as az
 
 def run_pkpdsim_r_script(weight, age, creatinine_clearance):
     """
@@ -56,23 +57,28 @@ cat("Vancomycin concentration: ", round(dose_conc, 2), " mg/L\n")
 
 def run_bayesian_inference(weight, age, creatinine_clearance):
     """
-    This function uses the PKPDposterior package to run Bayesian inference
+    This function uses PyMC to run Bayesian inference
     for more precise dosing based on the patient's specific parameters.
     """
-    # Example prior data for Bayesian modeling
-    prior_data = {
-        "weight": weight,
-        "age": age,
-        "creatinine_clearance": creatinine_clearance,
-        "observed_concentration": np.nan  # Placeholder for real patient data
-    }
-    
-    # Run Bayesian inference using PKPDposterior
-    posterior_model = PKPDposterior(prior_data)
-    posterior_estimate = posterior_model.estimate_posterior()
-    
-    # Return the results of the Bayesian inference
-    return posterior_estimate
+    # Simulate observed data (placeholder for real patient data)
+    observed_concentration = 15.0  # Example observed concentration in mg/L
+
+    # Define Bayesian model
+    with pm.Model() as model:
+        # Priors for parameters
+        CL = pm.Normal('CL', mu=3.5 * (creatinine_clearance / 100), sigma=0.5)
+        V = pm.Normal('V', mu=0.7 * weight, sigma=0.1)
+
+        # Likelihood (observed data)
+        concentration = CL / V
+        observed = pm.Normal('observed', mu=concentration, sigma=1.0, observed=observed_concentration)
+
+        # Posterior sampling
+        trace = pm.sample(1000, return_inferencedata=True)
+
+    # Summarize the posterior
+    summary = az.summary(trace)
+    return summary
 
 # Streamlit interface
 def main():
@@ -91,7 +97,7 @@ def main():
     if st.button("Calculate Vancomycin Dose (Bayesian Method)"):
         # Run Bayesian inference for more precise dosing
         bayesian_output = run_bayesian_inference(weight, age, creatinine_clearance)
-        st.text(f"Posterior Estimate for Vancomycin Dosing: {bayesian_output}")
+        st.text(f"Posterior Estimate for Vancomycin Dosing:\n{bayesian_output}")
 
 if __name__ == "__main__":
     main()
