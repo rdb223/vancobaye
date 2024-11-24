@@ -1,5 +1,7 @@
 streamlit
 pandas
-numpy==1.21.6  # Ensure it's compatible with Python <3.11
-pkpdposterior
+numpy
+pymc
+arviz
+tempfile
 rpy2
